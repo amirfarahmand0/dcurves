@@ -225,12 +225,17 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
 #' @noRd
 #' @keywords internal
 .calculate_test_consequences <- function(outcome, risk, thresholds, outcome_type,
-                                         prevalence, time) {
-  df <-
-    tibble::tibble(
-      threshold = thresholds,
-      n = length(outcome)
-    )
+                                         prevalence, time, weights) {
+
+  if (is.null(weights)) {
+    weights <- rep(1, length(outcome))
+  }
+
+  df <- tibble::tibble(
+    threshold = thresholds,
+    n = sum(weights)
+  )
+
   # case-control population prev
   if (!is.null(prevalence)) {
     df$pos_rate <- prevalence
@@ -248,7 +253,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
   }
   # typical binary prev
   else {
-    df$pos_rate <- table(outcome)[2] / length(outcome)
+    df$pos_rate <- sum(weights[outcome == "TRUE"]) / sum(weights)
   }
 
   if (outcome_type == "binary") {
@@ -257,17 +262,14 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
       dplyr::rowwise() %>%
       dplyr::mutate(
         test_pos_rate =
-          .convert_to_binary_fct(risk >= .data$threshold) %>%
-          table() %>%
-          purrr::pluck(2) %>% {
-            . / .data$n
-          },
+          (risk >= .data$threshold) %>%
+          { sum(weights[.]) } %>%
+          { . / sum(weights) },
         tp_rate =
-          mean(risk[outcome == "TRUE"] >= .data$threshold) * .data$pos_rate %>%
-          unname(),
+          weighted.mean(risk >= .data$threshold, w = weights * (outcome == "TRUE")) * .data$pos_rate,
         fp_rate =
-          mean(risk[outcome == "FALSE"] >= .data$threshold) * (1 - .data$pos_rate) %>%
-          unname(),
+          weighted.mean(risk >= .data$threshold, w = weights * (outcome == "FALSE")) * (1 - .data$pos_rate),
+
       )
   }
   else if (outcome_type == "survival") {
