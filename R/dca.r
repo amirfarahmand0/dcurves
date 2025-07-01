@@ -71,7 +71,7 @@
 #' dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1)
 dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
                 label = NULL, harm = NULL, as_probability = character(),
-                time = NULL, prevalence = NULL) {
+                time = NULL, prevalence = NULL, weights = NULL) {
   # checking inputs ------------------------------------------------------------
   if (!is.data.frame(data))
     stop("`data=` must be a data frame", call. = FALSE)
@@ -91,6 +91,18 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
     list(all = "Treat All", none = "Treat None") %>%
     purrr::list_modify(!!!label)
   model_frame <- stats::model.frame(formula, data)
+
+  # weights validation
+  # Accepts either a scalar (applied uniformly to all observations) or a vector of observation-specific weights
+  if (!is.null(weights)) {
+    if (!is.numeric(weights)) stop("`weights` must be numeric.", call. = FALSE)
+    if (any(weights < 0)) stop("`weights` must be non-negative.", call. = FALSE)
+    if (!(length(weights) == 1 || length(weights) == nrow(model_frame))) {
+      stop("`weights` must be length 1 or the same length as data.", call. = FALSE)
+    }
+    weights <- rep(weights, length.out = nrow(model_frame))
+  }
+
   outcome_name <- names(model_frame)[1]
   if (any(c("all", "none") %in% names(model_frame))) {
     stop("Variables cannot be named 'all' or 'none': they are reserved.",
@@ -127,7 +139,8 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
       label = label,
       time = time,
       prevalence = prevalence,
-      harm = harm
+      harm = harm,
+      weights = weights
     )
 
   # return results -------------------------------------------------------------

@@ -45,7 +45,7 @@ test_consequences <- function(formula, data,
                                              "sens", "spec",
                                              "lr_pos", "lr_neg"),
                               thresholds = seq(0, 1, by = 0.25), label = NULL,
-                              time = NULL, prevalence = NULL) {
+                              time = NULL, prevalence = NULL, weights = NULL) {
   # checking inputs ------------------------------------------------------------
   if (!is.data.frame(data))
     stop("`data=` must be a data frame", call. = FALSE)
@@ -59,6 +59,19 @@ test_consequences <- function(formula, data,
   thresholds <- thresholds[thresholds >= 0 & thresholds <= 1]
 
   model_frame <- stats::model.frame(formula, data)
+
+  model_frame <- stats::model.frame(formula, data)
+
+  # weights validation
+  if (!is.null(weights)) {
+    if (!is.numeric(weights)) stop("`weights` must be numeric.", call. = FALSE)
+    if (any(weights < 0)) stop("`weights` must be non-negative.", call. = FALSE)
+    if (!(length(weights) == 1 || length(weights) == nrow(model_frame))) {
+      stop("`weights` must be length 1 or the same length as data.", call. = FALSE)
+    }
+    weights <- rep(weights, length.out = nrow(model_frame))
+  }
+
   outcome_name <- names(model_frame)[1]
   outcome_type <- .outcome_type(model_frame, outcome_name, time)
 
@@ -73,7 +86,7 @@ test_consequences <- function(formula, data,
 test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type,
                                          statistics,
                                          thresholds = seq(0, 1, by = 0.25), label = NULL,
-                                         time = NULL, prevalence = NULL, harm = NULL) {
+                                         time = NULL, prevalence = NULL, harm = NULL, weights = NULL) {
 
   # for binary outcomes, make the outcome a factor
   # so both levels always appear in `table()` results
