@@ -45,3 +45,31 @@ test_that("invalid weights raise errors", {
   )
 })
 
+test_that("case-control data with prevalence runs correctly", {
+
+  result <- dca(casecontrol ~ cancerpredmarker,
+                data = df_case_control,
+                prevalence = 0.15)
+  nb <- as_tibble(result)$net_benefit
+  expect_true(is.numeric(nb))
+  expect_length(nb, length(result$dca$threshold))
+})
+
+test_that("manual weighted net benefit matches expected value", {
+  toy <- data.frame(
+    y = c(1, 0, 1, 0),
+    risk = c(0.9, 0.8, 0.3, 0.2),
+    w = c(1.0, 0.5, 2.0, 0.5)
+  )
+  result <- dca(y ~ risk, data = toy, thresholds = 0.5, weights = toy$w)
+  nb_df <- as_tibble(result)
+
+  nb_model <- nb_df$net_benefit[nb_df$variable == "risk"]
+
+  expect_equal(nb_model, 0.125, tolerance = 1e-4)
+})
+
+
+
+
+
