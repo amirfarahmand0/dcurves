@@ -45,11 +45,31 @@ test_that("invalid weights raise errors", {
   )
 })
 
-test_that("case-control data with prevalence runs correctly", {
+test_that("case-control data with prevalence and weights runs correctly", {
+  set.seed(42)
+  n_cases <- 100
+  n_controls <- 100
+  df_case_control <- data.frame(
+    casecontrol = c(rep(1, n_cases), rep(0, n_controls)),
+    cancerpredmarker = c(
+      rbeta(n_cases, 2, 1),
+      rbeta(n_controls, 1, 2)
+    )
+  )
+
+  true_prevalence <- 0.15
+
+  # For cases: weight = 1
+  # For controls: weight = (p / (1-p)) * (n_cases / n_controls)
+  weight_case <- 1
+  weight_control <- (true_prevalence / (1 - true_prevalence)) * (n_cases / n_controls)
+  weights <- c(rep(weight_case, n_cases), rep(weight_control, n_controls))
 
   result <- dca(casecontrol ~ cancerpredmarker,
                 data = df_case_control,
-                prevalence = 0.15)
+                prevalence = true_prevalence,
+                weights = weights)
+
   nb <- as_tibble(result)$net_benefit
   expect_true(is.numeric(nb))
   expect_length(nb, length(result$dca$threshold))
