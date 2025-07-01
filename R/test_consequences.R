@@ -60,8 +60,6 @@ test_consequences <- function(formula, data,
 
   model_frame <- stats::model.frame(formula, data)
 
-  model_frame <- stats::model.frame(formula, data)
-
   # weights validation
   if (!is.null(weights)) {
     if (!is.numeric(weights)) stop("`weights` must be numeric.", call. = FALSE)
@@ -107,7 +105,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
                                      thresholds = thresholds,
                                      outcome_type = outcome_type,
                                      prevalence = prevalence,
-                                     time = time
+                                     time = time, weights = weights
         ) %>%
           dplyr::mutate(
             variable = x,
@@ -268,7 +266,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
         tp_rate =
           weighted.mean(risk >= .data$threshold, w = weights * (outcome == "TRUE")) * .data$pos_rate,
         fp_rate =
-          weighted.mean(risk >= .data$threshold, w = weights * (outcome == "FALSE")) * (1 - .data$pos_rate),
+          weighted.mean(risk >= .data$threshold, w = weights * (outcome == "FALSE")) * (1 - .data$pos_rate)
 
       )
   }
