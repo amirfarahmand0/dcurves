@@ -12,7 +12,8 @@ dca(
   harm = NULL,
   as_probability = character(),
   time = NULL,
-  prevalence = NULL
+  prevalence = NULL,
+  weights = NULL
 )
 }
 \arguments{
@@ -38,6 +39,8 @@ assessment is made}
 \item{prevalence}{When \code{NULL}, the prevalence is estimated from \verb{data=}.
 If the data passed is a case-control set, the population prevalence
 may be set with this argument.}
+
+\item{weights}{Numeric vector of observation weights or scalar recycled across observations, Default is NULL (equal weights).}
 }
 \value{
 List including net benefit of each variable

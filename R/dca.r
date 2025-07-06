@@ -32,6 +32,7 @@
 #' @param prevalence When `NULL`, the prevalence is estimated from `data=`.
 #' If the data passed is a case-control set, the population prevalence
 #' may be set with this argument.
+#' @param weights Numeric vector of observation weights or scalar recycled across observations, Default is NULL (equal weights).
 #'
 #' @section as_probability argument:
 #' While the `as_probability=` argument can be used to convert a marker to the
