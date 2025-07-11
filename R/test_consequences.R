@@ -239,7 +239,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
     df$pos_rate <- prevalence
   } # survival endpoint prev
   else if (outcome_type == "survival") {
-    outcome_prev <- .surv_to_risk(outcome ~ 1, time = time, quiet = TRUE) # TODO: print the multistate model note only once
+    outcome_prev <- .surv_to_risk(outcome ~ 1, time = time, weights = weights, quiet = TRUE) # TODO: print the multistate model note only once
     if (is.na(outcome_prev)) {
       paste(
         "Cannot calculate outcome prevalence at specified time,",
