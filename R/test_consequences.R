@@ -275,14 +275,14 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
       df %>%
       dplyr::rowwise() %>%
       dplyr::mutate(
-        test_pos_rate =
-          .convert_to_binary_fct(risk >= .data$threshold) %>%
-          table() %>%
-          purrr::pluck(2) %>%
-          {. / .data$n},
+        test_pos_rate = {
+          is_positive <- .convert_to_binary_fct(risk >= .data$threshold)
+          tbl <- tapply(weights, is_positive, sum, default = 0)
+          (tbl[["TRUE"]] %||% 0) / sum(weights)
+        },
         risk_rate_among_test_pos =
           tryCatch(
-            .surv_to_risk(outcome[risk >= .data$threshold] ~ 1, time = time),
+            .surv_to_risk(outcome[risk >= .data$threshold] ~ 1, weights = weights[risk >= .data$threshold],  time = time),
             error = function(e) {
               if (length(outcome[risk >= .data$threshold]) == 0L) {
                 return(0)

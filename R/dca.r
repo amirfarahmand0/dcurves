@@ -208,9 +208,9 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 #'
 #' @noRd
 #' @keywords internal
-.surv_to_risk <- function(outcome, time, quiet = TRUE) {
+.surv_to_risk <- function(outcome, time, weights = NULL ,quiet = TRUE) {
   df_tidy <-
-    survival::survfit(outcome) %>%
+    survival::survfit(outcome, weights = weights) %>%
     broom::tidy()
 
   # if multistate (i.e. competing risks) delete states not of interest
