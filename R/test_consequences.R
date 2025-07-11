@@ -259,10 +259,11 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
       df %>%
       dplyr::rowwise() %>%
       dplyr::mutate(
-        test_pos_rate =
-          (risk >= .data$threshold) %>%
-          { sum(weights[.]) } %>%
-          { . / sum(weights) },
+        test_pos_rate = {
+          is_positive <- .convert_to_binary_fct(risk >= .data$threshold)
+          tbl <- tapply(weights, is_positive, sum, default = 0)
+          (tbl[["TRUE"]] %||% 0) / sum(weights)
+        },
         tp_rate =
           weighted.mean(risk >= .data$threshold, w = weights * (outcome == "TRUE")) * .data$pos_rate,
         fp_rate =
