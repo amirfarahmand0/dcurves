@@ -111,7 +111,7 @@ test_that("manual weighted net benefit matches explicit manual calculation", {
     risk = runif(n),
     w = sample(c(1, 2), n, replace = TRUE)
   )
-  threshold <- 0.5
+  threshold <- 0.1
   result <- dca(y ~ risk, data = toy, thresholds = threshold, weights = toy$w)
   nb_df <- as_tibble(result)
   nb_model <- nb_df$net_benefit[nb_df$variable == "risk"]
