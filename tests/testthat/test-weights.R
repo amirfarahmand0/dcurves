@@ -1,3 +1,5 @@
+# Test that specifying weights of all 1 reproduces identical net benefit as unweighted analysis,
+# ensuring that the weights pipeline does not alter results when weights are uniform.
 test_that("weights of 1 reproduce unweighted results", {
   out_unweighted <- dca(cancer ~ cancerpredmarker, data = df_binary)
   out_weighted <- dca(cancer ~ cancerpredmarker, data = df_binary,
@@ -7,6 +9,8 @@ test_that("weights of 1 reproduce unweighted results", {
                tolerance = 1e-10)
 })
 
+# Test that passing a scalar weight (e.g., 2) behaves identically to passing a vector of that scalar,
+# and that results match unweighted analysis up to a scaling factor, confirming consistent weight broadcasting.
 test_that("scalar weight recycled correctly", {
   out_scalar <- dca(cancer ~ cancerpredmarker, data = df_binary, weights = 2)
   out_vector <- dca(cancer ~ cancerpredmarker, data = df_binary,
@@ -20,18 +24,10 @@ test_that("scalar weight recycled correctly", {
                tolerance = 1e-10)
 })
 
-test_that("weighted calculations on toy data", {
-  toy <- data.frame(
-    y = c(1, 0, 1, 0),
-    risk = c(0.9, 0.8, 0.3, 0.2),
-    w = c(1, 0.5, 2, 0.5)
-  )
-  out <- dca(y ~ risk, data = toy, thresholds = 0.5, weights = toy$w)
-  nb <- as_tibble(out)$net_benefit
-  expect_true(is.numeric(nb))
-  expect_length(nb, length(out$dca$threshold))
-})
-
+# Test that invalid weight specifications are properly rejected:
+# - Negative weights should trigger an error.
+# - Weight vectors of incorrect length should trigger an error.
+# This ensures robust and informative input validation for users.
 test_that("invalid weights raise errors", {
   expect_error(
     dca(cancer ~ cancerpredmarker, data = df_binary,
@@ -40,56 +36,90 @@ test_that("invalid weights raise errors", {
   )
   expect_error(
     dca(cancer ~ cancerpredmarker, data = df_binary,
-        weights = rep(1, 5)),  # wrong length
+        weights = rep(1, 5)),
     "length"
   )
 })
 
-test_that("case-control data with prevalence and weights runs correctly", {
-  set.seed(42)
-  n_cases <- 100
-  n_controls <- 100
-  df_case_control <- data.frame(
-    casecontrol = c(rep(1, n_cases), rep(0, n_controls)),
-    cancerpredmarker = c(
-      rbeta(n_cases, 2, 1),
-      rbeta(n_controls, 1, 2)
-    )
+# Test that weighted DCA for binary outcomes is equivalent to explicit replication:
+# doubling the weight of the second half of the dataset should produce identical net benefit
+# to duplicating the second half of the dataset explicitly and running unweighted analysis.
+test_that("weighted binary DCA matches explicit replication approach", {
+  n <- nrow(df_binary)
+  weights <- rep(1, n)
+  weights[(n/2 + 1):n] <- 2
+  result_weighted <- dca(
+    cancer ~ cancerpredmarker + famhistory,
+    data = df_binary,
+    thresholds = seq(0, 0.35, by = 0.05),
+    weights = weights
   )
-
-  true_prevalence <- 0.15
-
-  # For cases: weight = 1
-  # For controls: weight = (p / (1-p)) * (n_cases / n_controls)
-  weight_case <- 1
-  weight_control <- (true_prevalence / (1 - true_prevalence)) * (n_cases / n_controls)
-  weights <- c(rep(weight_case, n_cases), rep(weight_control, n_controls))
-
-  result <- dca(casecontrol ~ cancerpredmarker,
-                data = df_case_control,
-                prevalence = true_prevalence,
-                weights = weights)
-
-  nb <- as_tibble(result)$net_benefit
-  expect_true(is.numeric(nb))
-  expect_length(nb, length(result$dca$threshold))
+  nb_weighted <- as_tibble(result_weighted)$net_benefit
+  df_replicated <- dplyr::bind_rows(
+    df_binary[1:(n/2), ],
+    df_binary[(n/2 + 1):n, ],
+    df_binary[(n/2 + 1):n, ]
+  )
+  result_replicated <- dca(
+    cancer ~ cancerpredmarker + famhistory,
+    data = df_replicated,
+    thresholds = seq(0, 0.35, by = 0.05)
+  )
+  nb_replicated <- as_tibble(result_replicated)$net_benefit
+  expect_equal(nb_weighted, nb_replicated, tolerance = 1e-6)
 })
 
-test_that("manual weighted net benefit matches expected value", {
+# Test that weighted DCA for survival outcomes is equivalent to explicit replication:
+# doubling the weight of the second half of the dataset should produce identical net benefit
+# to duplicating the second half explicitly and running unweighted analysis,
+# validating correctness of the weighted survival implementation.
+test_that("weighted survival DCA matches explicit replication approach", {
+  n <- nrow(df_surv)
+  weights <- rep(1, n)
+  weights[(n/2 + 1):n] <- 2
+  result_weighted <- dca(
+    Surv(ttcancer, cancer) ~ cancerpredmarker,
+    data = df_surv,
+    time = 1,
+    thresholds = seq(0, 0.50, by = 0.05),
+    weights = weights
+  )
+  nb_weighted <- as_tibble(result_weighted)$net_benefit
+  df_replicated <- dplyr::bind_rows(
+    df_surv[1:(n/2), ],
+    df_surv[(n/2 + 1):n, ],
+    df_surv[(n/2 + 1):n, ]
+  )
+  result_replicated <- dca(
+    Surv(ttcancer, cancer) ~ cancerpredmarker,
+    data = df_replicated,
+    time = 1,
+    thresholds = seq(0, 0.50, by = 0.05)
+  )
+  nb_replicated <- as_tibble(result_replicated)$net_benefit
+  expect_equal(nb_weighted, nb_replicated, tolerance = 1e-6)
+})
+
+# Test that manual calculation of weighted net benefit matches the output of dca:
+# computes net benefit explicitly using the weighted formula,
+# comparing it to the dca output to confirm the internal calculation logic is correct under arbitrary weights.
+test_that("manual weighted net benefit matches explicit manual calculation", {
+  set.seed(123)
+  n <- 20
   toy <- data.frame(
-    y = c(1, 0, 1, 0),
-    risk = c(0.9, 0.8, 0.3, 0.2),
-    w = c(1.0, 0.5, 2.0, 0.5)
+    y = rbinom(n, 1, 0.4),
+    risk = runif(n),
+    w = sample(c(1, 2), n, replace = TRUE)
   )
-  result <- dca(y ~ risk, data = toy, thresholds = 0.5, weights = toy$w)
+  threshold <- 0.5
+  result <- dca(y ~ risk, data = toy, thresholds = threshold, weights = toy$w)
   nb_df <- as_tibble(result)
-
   nb_model <- nb_df$net_benefit[nb_df$variable == "risk"]
-
-  expect_equal(nb_model, 0.125, tolerance = 1e-4)
+  w_total <- sum(toy$w)
+  predicted_positive <- toy$risk >= threshold
+  TP <- sum(toy$w[predicted_positive & toy$y == 1])
+  FP <- sum(toy$w[predicted_positive & toy$y == 0])
+  p_threshold <- threshold / (1 - threshold)
+  manual_nb <- TP / w_total - p_threshold * FP / w_total
+  expect_equal(nb_model, manual_nb, tolerance = 1e-6)
 })
-
-
-
-
-
