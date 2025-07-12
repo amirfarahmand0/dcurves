@@ -1,16 +1,31 @@
-<!-- README.md is generated from README.Rmd. Please edit that file -->
 
+<!-- README.md is generated from README.Rmd. Please edit that file -->
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/ddsjoberg/dcurves/workflows/R-CMD-check/badge.svg)](https://github.com/ddsjoberg/dcurves/actions) [![Codecov test coverage](https://codecov.io/gh/ddsjoberg/dcurves/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ddsjoberg/dcurves?branch=main) [![CRAN status](https://www.r-pkg.org/badges/version/dcurves)](https://cran.r-project.org/package=dcurves)
+[![R-CMD-check](https://github.com/ddsjoberg/dcurves/workflows/R-CMD-check/badge.svg)](https://github.com/ddsjoberg/dcurves/actions)
+[![Codecov test
+coverage](https://codecov.io/gh/ddsjoberg/dcurves/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ddsjoberg/dcurves?branch=main)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/dcurves)](https://cran.r-project.org/package=dcurves)
 
 <!-- badges: end -->
 
 # Decision Curve Analysis
 
-Diagnostic and prognostic models are typically evaluated with measures of accuracy that do not address clinical consequences. Decision-analytic techniques allow assessment of clinical outcomes but often require collection of additional information and may be cumbersome to apply to models that yield a continuous result. Decision curve analysis is a method for evaluating and comparing prediction models that incorporates clinical consequences, requires only the data set on which the models are tested, and can be applied to models that have either continuous or dichotomous results.
+Diagnostic and prognostic models are typically evaluated with measures
+of accuracy that do not address clinical consequences. Decision-analytic
+techniques allow assessment of clinical outcomes but often require
+collection of additional information and may be cumbersome to apply to
+models that yield a continuous result. Decision curve analysis is a
+method for evaluating and comparing prediction models that incorporates
+clinical consequences, requires only the data set on which the models
+are tested, and can be applied to models that have either continuous or
+dichotomous results.
 
-The **dcurves** package includes methods for evaluating predictive models with binary (Vickers and Elkin 2006) and time-to-event endpoints (Vickers et al. 2008). The package also includes methods for model evaluation in the case-control setting (Pfeiffer and Gail 2020).
+The **dcurves** package includes methods for evaluating predictive
+models with binary (Vickers and Elkin 2006) and time-to-event endpoints
+(Vickers et al. 2008). The package also includes methods for model
+evaluation in the case-control setting (Pfeiffer and Gail 2020).
 
 ## Installation
 
@@ -36,7 +51,7 @@ dca(cancer ~ cancerpredmarker + famhistory,
   plot(smooth = TRUE)
 ```
 
-<img src="man/figures/README-example1-1.png" width="100%"/>
+<img src="man/figures/README-example1-1.png" width="100%" />
 
 Assess models predicting time-to-event (survival) endpoints.
 
@@ -49,17 +64,23 @@ dca(Surv(ttcancer, cancer) ~ cancerpredmarker,
   plot(smooth=TRUE)
 ```
 
-<img src="man/figures/README-example2-1.png" width="100%"/>
+<img src="man/figures/README-example2-1.png" width="100%" />
 
 ## Using Weights in `dca()`
 
-The `dca()` function supports a `weights` argument for **binary, survival, and case-control settings**, enabling:
+The `dca()` function supports a `weights` argument for **binary,
+survival, and case-control settings**, enabling:
 
--   Incorporation of survey or case-control design weights.
--   Importance weighting of patients in net benefit evaluation.
--   Flexible scenario analyses with minimal code changes.
+- Incorporation of survey or case-control design weights.
+- Importance weighting of patients in net benefit evaluation.
+- Flexible scenario analyses with minimal code changes.
 
-Below is an example, using the same settings as the unweighted example above, where the **first half of the dataset is assigned a weight of 0.1 and the second half a weight of 5.** This can reflect scenarios such as **prioritizing certain patient groups or addressing oversampling in evaluation**, allowing flexible importance weighting during decision curve analysis.
+Below is an example, using the same settings as the unweighted example
+above, where the **first half of the dataset is assigned a weight of 0.1
+and the second half a weight of 5.** This can reflect scenarios such as
+**prioritizing certain patient groups or addressing oversampling in
+evaluation**, allowing flexible importance weighting during decision
+curve analysis.
 
 ``` r
 library(dcurves)
@@ -77,9 +98,11 @@ dca(
   plot(smooth=TRUE)
 ```
 
-<img src="man/figures/README-weights-example-1.png" width="100%"/>
+<img src="man/figures/README-weights-example-1.png" width="100%" />
 
-Using `weights` in `dca()` allows users to incorporate **importance weighting seamlessly into decision curve analysis** workflows in a transparent and memory-efficient manner.
+Using `weights` in `dca()` allows users to incorporate **importance
+weighting seamlessly into decision curve analysis** workflows in a
+transparent and memory-efficient manner.
 
 ## Create a customized DCA figure
 
@@ -106,8 +129,15 @@ gg_dca <-
 
 ## References
 
-Pfeiffer, Ruth M, and Mitchell H Gail. (2020) “Estimating the Decision Curve and Its Precision from Three Study Designs.” *Biometrical Journal* 62 (3): 764–76.
+Pfeiffer, Ruth M, and Mitchell H Gail. (2020) “Estimating the Decision
+Curve and Its Precision from Three Study Designs.” *Biometrical Journal*
+62 (3): 764–76.
 
-Vickers, Andrew J, Angel M Cronin, Elena B Elkin, and Mithat Gonen. (2008) “Extensions to Decision Curve Analysis, a Novel Method for Evaluating Diagnostic Tests, Prediction Models and Molecular Markers.” *BMC Medical Informatics and Decision Making* 8 (1): 1–17.
+Vickers, Andrew J, Angel M Cronin, Elena B Elkin, and Mithat Gonen.
+(2008) “Extensions to Decision Curve Analysis, a Novel Method for
+Evaluating Diagnostic Tests, Prediction Models and Molecular Markers.”
+*BMC Medical Informatics and Decision Making* 8 (1): 1–17.
 
-Vickers, Andrew J, and Elena B Elkin. (2006) “Decision Curve Analysis: A Novel Method for Evaluating Prediction Models.” *Medical Decision Making* 26 (6): 565–74.
+Vickers, Andrew J, and Elena B Elkin. (2006) “Decision Curve Analysis: A
+Novel Method for Evaluating Prediction Models.” *Medical Decision
+Making* 26 (6): 565–74.
