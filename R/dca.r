@@ -208,45 +208,31 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 #'
 #' @noRd
 #' @keywords internal
-.surv_to_risk <- function(outcome, time, weights = NULL ,quiet = TRUE) {
+.surv_to_risk <- function(outcome, time, weights = NULL, quiet = TRUE) {
   df_tidy <-
-    survival::survfit(outcome, weights = weights) %>%
+    survival::survfit(outcome ~ 1, weights = weights) %>%
     broom::tidy()
 
-  # if multistate (i.e. competing risks) delete states not of interest
+  # Handle multistate models (e.g. competing risks)
   if ("state" %in% names(df_tidy)) {
     state <- unique(df_tidy$state) %>%
       setdiff("(s0)") %>%
       purrr::pluck(1)
-    df_tidy <- df_tidy %>% dplyr::filter(.data$state %in% .env$state)
+    df_tidy <- df_tidy %>% dplyr::filter(.data$state == .env$state)
     if (!isTRUE(quiet)) {
-      glue::glue(
-        "Multi-state model detected. Showing probabilities into state '{state}'") %>%
+      glue::glue("Multi-state model detected. Showing probabilities into state '{state}'") %>%
         message()
     }
-  }
-  # if regular survfit() model, convert survival to risk
-  else {
-    df_tidy <- dplyr::mutate(df_tidy, estimate = 1 - .data$estimate)
+  } else {
+    df_tidy <- df_tidy %>% dplyr::mutate(estimate = 1 - .data$estimate)
   }
 
-  # if no observed times after specified time, return NA
-  if (max(df_tidy$time) < time) {
-    return(NA_real_)
-  }
+  if (max(df_tidy$time) < time) return(NA_real_)
 
-  df_tidy <-
-    df_tidy %>%
-    dplyr::filter(.data$time <= .env$time)
+  df_tidy <- df_tidy %>% dplyr::filter(.data$time <= .env$time)
+  if (nrow(df_tidy) == 0L) return(NA_real_)
 
-  # if no observed times after time point, return NA
-  if (nrow(df_tidy) == 0L) {
-    return(NA_real_)
-  }
-
-  df_tidy %>%
-    dplyr::slice_tail() %>%
-    dplyr::pull("estimate")
+  df_tidy %>% dplyr::slice_tail(n = 1) %>% dplyr::pull("estimate")
 }
 
 

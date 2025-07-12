@@ -76,7 +76,7 @@ test_consequences <- function(formula, data,
   test_consequences_data_frame(model_frame = model_frame, outcome_name = outcome_name,
                                outcome_type = outcome_type, statistics = statistics,
                                thresholds = thresholds, label = label,
-                               time = time, prevalence = prevalence, harm = NULL)
+                               time = time, prevalence = prevalence, weights = weights, harm = NULL)
 }
 
 # function returns a data frame of test diagnostic statistics are various thresholds
@@ -239,7 +239,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
     df$pos_rate <- prevalence
   } # survival endpoint prev
   else if (outcome_type == "survival") {
-    outcome_prev <- .surv_to_risk(outcome ~ 1, time = time, weights = weights, quiet = TRUE) # TODO: print the multistate model note only once
+    outcome_prev <- .surv_to_risk(outcome, time = time, weights = weights, quiet = TRUE) # TODO: print the multistate model note only once
     if (is.na(outcome_prev)) {
       paste(
         "Cannot calculate outcome prevalence at specified time,",
@@ -283,7 +283,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
         },
         risk_rate_among_test_pos =
           tryCatch(
-            .surv_to_risk(outcome[risk >= .data$threshold] ~ 1, weights = weights[risk >= .data$threshold],  time = time),
+            .surv_to_risk(outcome[risk >= .data$threshold] , weights = weights[risk >= .data$threshold],  time = time),
             error = function(e) {
               if (length(outcome[risk >= .data$threshold]) == 0L) {
                 return(0)
@@ -305,6 +305,7 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
       "test_pos_rate", "tp_rate", "fp_rate"
     )))
 }
+
 
 
 #' Convert binary outcome to factor

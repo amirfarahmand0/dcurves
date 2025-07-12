@@ -97,6 +97,8 @@ test_that("weighted survival DCA matches explicit replication approach", {
     thresholds = seq(0, 0.50, by = 0.05)
   )
   nb_replicated <- as_tibble(result_replicated)$net_benefit
+  print("\n")
+  paste("hey",max(nb_weighted - nb_replicated))
   expect_equal(nb_weighted, nb_replicated, tolerance = 1e-6)
 })
 
