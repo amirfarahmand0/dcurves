@@ -102,6 +102,11 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
       stop("`weights` must be length 1 or the same length as data.", call. = FALSE)
     }
     weights <- rep(weights, length.out = nrow(model_frame))
+
+    if (!is.null(weights) && length(unique(weights)) == 1) {
+      warning("All weights are equal; results are equivalent to unweighted analysis.")
+    }
+
   }
 
   outcome_name <- names(model_frame)[1]

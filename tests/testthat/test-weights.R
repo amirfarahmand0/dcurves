@@ -107,7 +107,7 @@ test_that("weighted survival DCA matches explicit replication approach", {
 # comparing it to the dca output to confirm the internal calculation logic is correct under arbitrary weights.
 test_that("manual weighted net benefit matches explicit manual calculation", {
   set.seed(123)
-  n <- 20
+  n <- 200
   toy <- data.frame(
     y = rbinom(n, 1, 0.4),
     risk = runif(n),
@@ -125,3 +125,50 @@ test_that("manual weighted net benefit matches explicit manual calculation", {
   manual_nb <- TP / w_total - p_threshold * FP / w_total
   expect_equal(nb_model, manual_nb, tolerance = 1e-6)
 })
+
+# Test that manual calculation of weighted survival net benefit matches the output of dca:
+# This test generates a small synthetic survival dataset with arbitrary observation weights,
+# runs the weighted dca() function at a specified time point and threshold,
+# and manually computes the time-dependent weighted net benefit using the same
+# survival-Kaplan-Meier-based formula that dca() uses internally for survival outcomes.
+# The manually computed net benefit is then compared to the dca() output to confirm
+# that the internal calculation logic produces correct results under arbitrary weights.
+
+test_that("manual weighted survival net benefit matches dca output", {
+  set.seed(123)
+  n <- 200
+  toy <- data.frame(
+    time = rexp(n, 0.1),
+    status = sample(c(0, 1), n, replace = TRUE),
+    risk = runif(n),
+    w = sample(c(1, 2), n, replace = TRUE)
+  )
+
+  t0 <- 3
+  threshold <- 0.4
+  w_total <- sum(toy$w)
+  result <- dca(Surv(time, status) ~ risk,
+                data = toy,
+                time = t0,
+                thresholds = threshold,
+                weights = toy$w)
+
+  nb_df <- as_tibble(result)
+  nb_model <- nb_df$net_benefit[nb_df$variable == "risk"]
+  predicted_positive <- toy$risk >= threshold
+  sf_pos <- survfit(Surv(time, status) ~ 1,
+                    data = toy[predicted_positive, ],
+                    weights = toy$w[predicted_positive])
+  S_pos_t0 <- summary(sf_pos, times = t0, extend = TRUE)$surv
+  risk_rate_among_pos <- 1 - S_pos_t0
+
+  test_pos_rate <- sum(toy$w[predicted_positive]) / w_total
+  tp_rate <- risk_rate_among_pos * test_pos_rate
+  fp_rate <- (1 - risk_rate_among_pos) * test_pos_rate
+
+  p_threshold <- threshold / (1 - threshold)
+  manual_nb <- tp_rate - p_threshold * fp_rate
+
+  expect_equal(nb_model, manual_nb, tolerance = 1e-6)
+})
+
