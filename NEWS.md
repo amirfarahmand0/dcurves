@@ -1,5 +1,9 @@
 # dcurves (development version)
 
+* `dca()` and `test_consequences()` gain `weights=`, case weights for every outcome: weighted proportions for a binary outcome, and weighted Kaplan-Meier (Aalen-Johansen) estimates for a survival outcome.
+
+* `dca()` and `test_consequences()` gain `cipcw=`: for a survival outcome, conditional inverse probability of censoring weighting (cIPCW), which allows censoring to depend on covariates, instead of Kaplan-Meier. Give the covariates of the censoring (e.g. `cipcw = ~ age + famhistory`, a Cox censoring model is fitted, with weights truncated at 50), your own censoring model, or `cipcw_control()` for the other options (truncation, given weights, other models with `predict_function=`). Competing risks are supported.
+
 # dcurves 0.5.1
 
 * HTML5 documentation update to satisfy CRAN requirement.

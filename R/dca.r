@@ -29,9 +29,49 @@
 #' that will be converted to a probability. Details below.
 #' @param time if outcome is survival, `time=` specifies the time the
 #' assessment is made
+#' @param weights Optional case weights, one per patient: the name of a column
+#' of `data=`, or a numeric vector with one weight per row of `data=`
+#' (non-negative). Every proportion is then weighted (for a survival outcome,
+#' the Kaplan-Meier or Aalen-Johansen estimates are weighted). Use them, e.g.,
+#' for samples that do not represent the target population in equal
+#' proportions (each patient weighted by the inverse of the probability of
+#' being sampled). Default `NULL`: every patient counts once.
+#' @param cipcw For a survival outcome, optional conditional inverse probability
+#' of censoring weighting (cIPCW), which allows censoring to depend on
+#' covariates, instead of Kaplan-Meier: the covariates of the censoring, e.g.
+#' `cipcw = ~ age + famhistory` (a Cox model of the censoring times on them is
+#' fitted, and the censoring probabilities are truncated at 0.02); your own
+#' fitted censoring model; or [cipcw_control()] for the other options. Not
+#' combined with `prevalence=`. Details in [cipcw_control()].
 #' @param prevalence When `NULL`, the prevalence is estimated from `data=`.
 #' If the data passed is a case-control set, the population prevalence
 #' may be set with this argument.
+#'
+#' @section weights and cipcw arguments:
+#' With case weights \eqn{v_i} (`weights=`), the prevalence and the rates are
+#' weighted proportions; for a binary outcome \eqn{Y},
+#' \deqn{\mathrm{tp\_rate}(z) = \frac{\sum_i v_i Y_i 1(\hat\pi_i \ge z)}{\sum_i v_i},
+#' \quad \mathrm{fp\_rate}(z) = \frac{\sum_i v_i (1 - Y_i) 1(\hat\pi_i \ge z)}{\sum_i v_i},}
+#' where \eqn{\hat\pi_i} is the predicted risk and \eqn{1(\hat\pi_i \ge z)} is 1
+#' for the patients treated at threshold \eqn{z}. For a survival outcome, the
+#' Kaplan-Meier (or Aalen-Johansen) risk by `time=`, overall and among the
+#' patients treated, is the weighted estimate, and the share treated is
+#' weighted. Without `weights=`, every \eqn{v_i = 1} and the results are
+#' unchanged.
+#'
+#' With `cipcw=`, a survival outcome is estimated with conditional inverse
+#' probability of censoring weights instead of Kaplan-Meier: each patient with
+#' an event (of any cause) by `time=` \eqn{\tau} is weighted by
+#' \eqn{1/\hat G(\tilde T_i- \mid X_i)}, and each patient event-free at
+#' \eqn{\tau} by \eqn{1/\hat G(\tau \mid X_i)}, with \eqn{\tilde T_i} the observed
+#' time, \eqn{X_i} the covariates of the censoring model and \eqn{\hat G(t \mid X)}
+#' the estimated probability of remaining uncensored up to \eqn{t}; patients
+#' censored before \eqn{\tau} get no weight. The prevalence is then the weighted
+#' share of patients with the event of interest by \eqn{\tau}, and
+#' `tp_rate` and `fp_rate` are the prevalence times the weighted sensitivity,
+#' and one minus the prevalence times one minus the weighted specificity (a
+#' competing event by \eqn{\tau} counts as no event of interest). Case weights
+#' multiply the censoring weights. See [cipcw_control()].
 #'
 #' @section as_probability argument:
 #' While the `as_probability=` argument can be used to convert a marker to the
@@ -71,7 +111,7 @@
 #' dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1)
 dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
                 label = NULL, harm = NULL, as_probability = character(),
-                time = NULL, prevalence = NULL) {
+                time = NULL, prevalence = NULL, weights = NULL, cipcw = NULL) {
   # checking inputs ------------------------------------------------------------
   if (!is.data.frame(data))
     stop("`data=` must be a data frame", call. = FALSE)
@@ -99,8 +139,13 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 
   outcome_type <- .outcome_type(model_frame, outcome_name, time)
 
+  # case weights and cIPCW ------------------------------------------------------
+  wc <- .weights_and_cipcw(model_frame, data, outcome_name, outcome_type, weights,
+                           cipcw, time, prevalence)
+
   # convert to probability if requested ----------------------------------------
-  model_frame <- .as_probability(model_frame, outcome_name, outcome_type, as_probability, time)
+  model_frame <- .as_probability(model_frame, outcome_name, outcome_type, as_probability,
+                                 time, weights = wc$weights)
 
   # add treat all and treat none -----------------------------------------------
   model_frame <-
@@ -127,7 +172,9 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
       label = label,
       time = time,
       prevalence = prevalence,
-      harm = harm
+      harm = harm,
+      weights = wc$weights,
+      cipcw_weights = wc$cipcw_weights
     )
 
   # return results -------------------------------------------------------------
@@ -138,6 +185,8 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
       n = dca_result$n[1],
       prevalence = dca_result$pos_rate[1],
       time = time,
+      weights = if (!is.null(wc$weights)) TRUE,
+      cipcw = wc$cipcw_info,
       dca = dca_result
     ) %>%
     purrr::compact()
@@ -159,14 +208,18 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 #' @noRd
 #' @keywords internal
 .convert_to_risk <- function(outcome, variable, outcome_type,
-                             time = NULL, prevalence = NULL) {
+                             time = NULL, prevalence = NULL, weights = NULL) {
   if (outcome_type == "binary" && !is.null(prevalence)) {
     stop("Cannot convert to risks in case-control setting.")
   }
 
   if (outcome_type == "binary") {
+    # with case weights, quasibinomial gives the weighted logistic fit without
+    # warnings for non-integer weights
     risk <-
-      stats::glm(outcome ~ variable, family = stats::binomial) %>%
+      stats::glm(outcome ~ variable,
+                 family = if (is.null(weights)) stats::binomial else stats::quasibinomial,
+                 weights = weights) %>%
       stats::predict(type = "response")
   } else if (outcome_type == "survival") {
     # construct data frame
@@ -175,7 +228,7 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
     new_df$outcome[, 1] <- time
     # build model, and get predictions for time point of interest
     risk <-
-      survival::coxph(outcome ~ variable, data = df) %>%
+      survival::coxph(outcome ~ variable, data = df, weights = weights) %>%
       stats::predict(newdata = new_df, type = "expected") %>%
       {
         exp(-.)
@@ -194,10 +247,15 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 #'
 #' @noRd
 #' @keywords internal
-.surv_to_risk <- function(outcome, time, quiet = TRUE) {
-  df_tidy <-
-    survival::survfit(outcome) %>%
-    broom::tidy()
+.surv_to_risk <- function(outcome, time, quiet = TRUE, weights = NULL) {
+  fit <- if (is.null(weights)) {
+    survival::survfit(outcome)
+  } else {
+    # weighted Kaplan-Meier (Aalen-Johansen for competing risks)
+    y <- eval(outcome[[2]], environment(outcome))
+    survival::survfit(y ~ 1, weights = weights)
+  }
+  df_tidy <- broom::tidy(fit)
 
   # if multistate (i.e. competing risks) delete states not of interest
   if ("state" %in% names(df_tidy)) {
@@ -237,7 +295,8 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
 
 
 # convert marker to a probability
-.as_probability <- function(model_frame, outcome_name, outcome_type, as_probability, time) {
+.as_probability <- function(model_frame, outcome_name, outcome_type, as_probability, time,
+                            weights = NULL) {
   as_probability <-
     model_frame %>%
     dplyr::select(-dplyr::all_of(outcome_name)) %>%
@@ -246,7 +305,8 @@ dca <- function(formula, data, thresholds = seq(0, 0.99, by = 0.01),
     model_frame[[v]] <- .convert_to_risk(model_frame[[outcome_name]],
                                          model_frame[[v]],
                                          outcome_type = outcome_type,
-                                         time = time
+                                         time = time,
+                                         weights = weights
     )
   }
   .check_probability_range(model_frame, outcome_name)

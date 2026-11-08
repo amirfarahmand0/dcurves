@@ -12,7 +12,9 @@ test_consequences(
   thresholds = seq(0, 1, by = 0.25),
   label = NULL,
   time = NULL,
-  prevalence = NULL
+  prevalence = NULL,
+  weights = NULL,
+  cipcw = NULL
 )
 }
 \arguments{
@@ -35,6 +37,22 @@ assessment is made}
 \item{prevalence}{When \code{NULL}, the prevalence is estimated from \verb{data=}.
 If the data passed is a case-control set, the population prevalence
 may be set with this argument.}
+
+\item{weights}{Optional case weights, one per patient: the name of a column
+of \verb{data=}, or a numeric vector with one weight per row of \verb{data=}
+(non-negative). Every proportion is then weighted (for a survival outcome,
+the Kaplan-Meier or Aalen-Johansen estimates are weighted). Use them, e.g.,
+for samples that do not represent the target population in equal
+proportions (each patient weighted by the inverse of the probability of
+being sampled). Default \code{NULL}: every patient counts once.}
+
+\item{cipcw}{For a survival outcome, optional conditional inverse probability
+of censoring weighting (cIPCW), which allows censoring to depend on
+covariates, instead of Kaplan-Meier: the covariates of the censoring, e.g.
+\code{cipcw = ~ age + famhistory} (a Cox model of the censoring times on them is
+fitted, and the censoring probabilities are truncated at 0.02); your own
+fitted censoring model; or \code{\link[=cipcw_control]{cipcw_control()}} for the other options. Not
+combined with \verb{prevalence=}. Details in \code{\link[=cipcw_control]{cipcw_control()}}.}
 }
 \value{
 a tibble with test consequences

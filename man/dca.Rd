@@ -12,7 +12,9 @@ dca(
   harm = NULL,
   as_probability = character(),
   time = NULL,
-  prevalence = NULL
+  prevalence = NULL,
+  weights = NULL,
+  cipcw = NULL
 )
 }
 \arguments{
@@ -38,6 +40,22 @@ assessment is made}
 \item{prevalence}{When \code{NULL}, the prevalence is estimated from \verb{data=}.
 If the data passed is a case-control set, the population prevalence
 may be set with this argument.}
+
+\item{weights}{Optional case weights, one per patient: the name of a column
+of \verb{data=}, or a numeric vector with one weight per row of \verb{data=}
+(non-negative). Every proportion is then weighted (for a survival outcome,
+the Kaplan-Meier or Aalen-Johansen estimates are weighted). Use them, e.g.,
+for samples that do not represent the target population in equal
+proportions (each patient weighted by the inverse of the probability of
+being sampled). Default \code{NULL}: every patient counts once.}
+
+\item{cipcw}{For a survival outcome, optional conditional inverse probability
+of censoring weighting (cIPCW), which allows censoring to depend on
+covariates, instead of Kaplan-Meier: the covariates of the censoring, e.g.
+\code{cipcw = ~ age + famhistory} (a Cox model of the censoring times on them is
+fitted, and the censoring probabilities are truncated at 0.02); your own
+fitted censoring model; or \code{\link[=cipcw_control]{cipcw_control()}} for the other options. Not
+combined with \verb{prevalence=}. Details in \code{\link[=cipcw_control]{cipcw_control()}}.}
 }
 \value{
 List including net benefit of each variable
@@ -58,6 +76,34 @@ Review the
 for a detailed walk-through of various applications.
 Also, see \href{https://www.mskcc.org/departments/epidemiology-biostatistics/biostatistics/decision-curve-analysis}{www.decisioncurveanalysis.org} for more information.
 }
+\section{weights and cipcw arguments}{
+
+With case weights \eqn{v_i} (\verb{weights=}), the prevalence and the rates are
+weighted proportions; for a binary outcome \eqn{Y},
+\deqn{\mathrm{tp\_rate}(z) = \frac{\sum_i v_i Y_i 1(\hat\pi_i \ge z)}{\sum_i v_i},
+\quad \mathrm{fp\_rate}(z) = \frac{\sum_i v_i (1 - Y_i) 1(\hat\pi_i \ge z)}{\sum_i v_i},}
+where \eqn{\hat\pi_i} is the predicted risk and \eqn{1(\hat\pi_i \ge z)} is 1
+for the patients treated at threshold \eqn{z}. For a survival outcome, the
+Kaplan-Meier (or Aalen-Johansen) risk by \verb{time=}, overall and among the
+patients treated, is the weighted estimate, and the share treated is
+weighted. Without \verb{weights=}, every \eqn{v_i = 1} and the results are
+unchanged.
+
+With \verb{cipcw=}, a survival outcome is estimated with conditional inverse
+probability of censoring weights instead of Kaplan-Meier: each patient with
+an event (of any cause) by \verb{time=} \eqn{\tau} is weighted by
+\eqn{1/\hat G(\tilde T_i- \mid X_i)}, and each patient event-free at
+\eqn{\tau} by \eqn{1/\hat G(\tau \mid X_i)}, with \eqn{\tilde T_i} the observed
+time, \eqn{X_i} the covariates of the censoring model and \eqn{\hat G(t \mid X)}
+the estimated probability of remaining uncensored up to \eqn{t}; patients
+censored before \eqn{\tau} get no weight. The prevalence is then the weighted
+share of patients with the event of interest by \eqn{\tau}, and
+\code{tp_rate} and \code{fp_rate} are the prevalence times the weighted sensitivity,
+and one minus the prevalence times one minus the weighted specificity (a
+competing event by \eqn{\tau} counts as no event of interest). Case weights
+multiply the censoring weights. See \code{\link[=cipcw_control]{cipcw_control()}}.
+}
+
 \section{as_probability argument}{
 
 While the \verb{as_probability=} argument can be used to convert a marker to the

@@ -45,7 +45,8 @@ test_consequences <- function(formula, data,
                                              "sens", "spec",
                                              "lr_pos", "lr_neg"),
                               thresholds = seq(0, 1, by = 0.25), label = NULL,
-                              time = NULL, prevalence = NULL) {
+                              time = NULL, prevalence = NULL, weights = NULL,
+                              cipcw = NULL) {
   # checking inputs ------------------------------------------------------------
   if (!is.data.frame(data))
     stop("`data=` must be a data frame", call. = FALSE)
@@ -61,11 +62,14 @@ test_consequences <- function(formula, data,
   model_frame <- stats::model.frame(formula, data)
   outcome_name <- names(model_frame)[1]
   outcome_type <- .outcome_type(model_frame, outcome_name, time)
+  wc <- .weights_and_cipcw(model_frame, data, outcome_name, outcome_type, weights,
+                           cipcw, time, prevalence)
 
   test_consequences_data_frame(model_frame = model_frame, outcome_name = outcome_name,
                                outcome_type = outcome_type, statistics = statistics,
                                thresholds = thresholds, label = label,
-                               time = time, prevalence = prevalence, harm = NULL)
+                               time = time, prevalence = prevalence, harm = NULL,
+                               weights = wc$weights, cipcw_weights = wc$cipcw_weights)
 }
 
 # function returns a data frame of test diagnostic statistics are various thresholds
@@ -73,7 +77,8 @@ test_consequences <- function(formula, data,
 test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type,
                                          statistics,
                                          thresholds = seq(0, 1, by = 0.25), label = NULL,
-                                         time = NULL, prevalence = NULL, harm = NULL) {
+                                         time = NULL, prevalence = NULL, harm = NULL,
+                                         weights = NULL, cipcw_weights = NULL) {
 
   # for binary outcomes, make the outcome a factor
   # so both levels always appear in `table()` results
@@ -94,7 +99,9 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
                                      thresholds = thresholds,
                                      outcome_type = outcome_type,
                                      prevalence = prevalence,
-                                     time = time
+                                     time = time,
+                                     weights = weights,
+                                     cipcw_weights = cipcw_weights
         ) %>%
           dplyr::mutate(
             variable = x,
@@ -212,7 +219,13 @@ test_consequences_data_frame <- function(model_frame, outcome_name, outcome_type
 #' @noRd
 #' @keywords internal
 .calculate_test_consequences <- function(outcome, risk, thresholds, outcome_type,
-                                         prevalence, time) {
+                                         prevalence, time, weights = NULL,
+                                         cipcw_weights = NULL) {
+  # cIPCW (survival outcomes) or case weights: see .weighted_test_consequences()
+  if (!is.null(cipcw_weights) || !is.null(weights)) {
+    return(.weighted_test_consequences(outcome, risk, thresholds, outcome_type,
+                                       prevalence, time, weights, cipcw_weights))
+  }
   df <-
     tibble::tibble(
       threshold = thresholds,
