@@ -53,8 +53,9 @@ being sampled). Default \code{NULL}: every patient counts once.}
 of censoring weighting (cIPCW), which allows censoring to depend on
 covariates, instead of Kaplan-Meier: the covariates of the censoring, e.g.
 \code{cipcw = ~ age + famhistory} (a Cox model of the censoring times on them is
-fitted, and the censoring probabilities are truncated at 0.02); your own
-fitted censoring model; or \code{\link[=cipcw_control]{cipcw_control()}} for the other options. Not
+fitted, and the censoring probabilities are truncated at 0.02), or
+\code{\link[=cipcw_control]{cipcw_control()}} for the other options (another truncation, your own
+censoring model with a function predicting from it, or given weights). Not
 combined with \verb{prevalence=}. Details in \code{\link[=cipcw_control]{cipcw_control()}}.}
 }
 \value{

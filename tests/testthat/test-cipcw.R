@@ -28,6 +28,14 @@ voipred_ref <- list(
 z <- seq(0.05, 0.5, by = 0.05)
 nb <- function(x, v) x$dca$net_benefit[x$dca$variable == v]
 quiet <- function(e) suppressMessages(suppressWarnings(e))
+# P(remaining uncensored) from a coxph censoring model, for predict_function=
+pf_cox <- function(model, newdata, times) {
+  sf <- survival::survfit(model, newdata = newdata)
+  vapply(seq_len(nrow(newdata)), function(i) {
+    j <- findInterval(times[i], sf$time)
+    if (j == 0) 1 else sf$surv[j, i]
+  }, numeric(1))
+}
 
 test_that("cIPCW gives the net benefit of voipred", {
   cox <- quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
@@ -42,9 +50,9 @@ test_that("cIPCW gives the net benefit of voipred", {
 
   cf <- survival::coxph(Surv(ttcancer, cancer == 0) ~ age + marker, data = df_surv)
   own <- quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
-                   thresholds = z, cipcw = cf))
-  expect_equal(nb(own, "cancerpredmarker"), voipred_ref$own_model$model, tolerance = 1e-12)
-  expect_equal(nb(own, "all"), voipred_ref$own_model$all, tolerance = 1e-12)
+                   thresholds = z, cipcw = cipcw_control(model = cf, predict_function = pf_cox)))
+  expect_equal(nb(own, "cancerpredmarker"), voipred_ref$own_model$model, tolerance = 1e-8)
+  expect_equal(nb(own, "all"), voipred_ref$own_model$all, tolerance = 1e-8)
 
   cr <- quiet(dca(Surv(ttcancer, cancer_cr) ~ cancerpredmarker, data = df_surv, time = 1,
                   thresholds = z, cipcw = ~ age + famhistory))
@@ -58,21 +66,10 @@ test_that("the ways of giving cIPCW agree", {
   ctl <- quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
                    thresholds = z, cipcw = cipcw_control(~ age + famhistory)))
   expect_equal(f$dca, ctl$dca)
-  # the same Cox model, given fitted (first argument of cipcw_control())
+  # the same Cox model, fitted yourself and given with predict_function
   cf <- survival::coxph(Surv(ttcancer, cancer == 0) ~ age + famhistory, data = df_surv)
-  m <- quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
-                 thresholds = z, cipcw = cipcw_control(cf)))
-  expect_equal(nb(m, "cancerpredmarker"), nb(f, "cancerpredmarker"), tolerance = 1e-12)
-  # predict_function: the same probabilities from survfit
-  pf <- function(model, newdata, times) {
-    sf <- survival::survfit(model, newdata = newdata)
-    vapply(seq_len(nrow(newdata)), function(i) {
-      j <- findInterval(times[i], sf$time)
-      if (j == 0) 1 else sf$surv[j, i]
-    }, numeric(1))
-  }
   p <- quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
-                 thresholds = z, cipcw = cipcw_control(model = cf, predict_function = pf)))
+                 thresholds = z, cipcw = cipcw_control(model = cf, predict_function = pf_cox)))
   expect_equal(nb(p, "cancerpredmarker"), nb(f, "cancerpredmarker"), tolerance = 1e-8)
   # given weights: those of the Cox model, without further truncation
   y <- survival::Surv(df_surv$ttcancer, df_surv$cancer)
@@ -138,8 +135,12 @@ test_that("cipcw_control() and cipcw= check their inputs", {
   expect_error(cipcw_control(weight_event = 1:3), "must be given together")
   expect_error(cipcw_control(weight_event = c(1, -1), weight_horizon = c(1, 1)),
                "must be positive, finite")
-  expect_error(cipcw_control(model = lm(age ~ marker, data = df_surv)),
-               "give `predict_function=`")
+  # your own model always needs predict_function, and goes in cipcw_control()
+  cf <- survival::coxph(Surv(ttcancer, cancer == 0) ~ age, data = df_surv)
+  expect_error(cipcw_control(model = cf), "needs `predict_function=`")
+  expect_error(cipcw_control(cf), "A fitted censoring model goes in `model=`")
+  expect_error(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
+                   cipcw = cf), "Your own censoring model goes in")
   expect_error(cipcw_control(~ age, predict_function = identity),
                "is for your own censoring `model=`")
   expect_output(print(cipcw_control(~ age + famhistory)), "Cox censoring model on ~age \\+ famhistory; truncation at 0.02")
@@ -157,7 +158,8 @@ test_that("cipcw_control() and cipcw= check their inputs", {
                          cipcw = ~ age)), "have missing values \\(age\\)")
   ev <- survival::coxph(Surv(ttcancer, cancer) ~ age, data = df_surv)
   expect_error(quiet(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
-                         cipcw = ev)), "fitted to the event, not to censoring")
+                         cipcw = cipcw_control(model = ev, predict_function = pf_cox))),
+               "fitted to the event, not to censoring")
   expect_error(dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
                    cipcw = "age"), "`cipcw=` must be")
 })

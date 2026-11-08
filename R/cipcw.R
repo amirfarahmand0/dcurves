@@ -7,8 +7,8 @@
 #' `dca(..., cipcw = ~ age + famhistory)`: a Cox model of the censoring times
 #' on these covariates is fitted, and the weights are truncated at
 #' `min_prob = 0.02` (i.e. weights of at most 50). `cipcw_control()` sets the
-#' other options: another truncation, your own censoring model, or the weights
-#' themselves.
+#' other options: another truncation, your own censoring model with a function
+#' that predicts from it, or the weights themselves.
 #'
 #' @section cIPCW:
 #' With \eqn{T_i} the event time and \eqn{C_i} the censoring time of patient
@@ -34,12 +34,11 @@
 #'   `~ age + famhistory`: a Cox model of the censoring times on them is fitted
 #'   on `data=` of [dca()] (with its case weights, if any). The same as giving
 #'   the formula as `cipcw=` directly.
-#' @param model Your own censoring model, fitted on the same patients with the
-#'   censored patients as the events, e.g.
-#'   `coxph(Surv(ttcancer, cancer == 0) ~ age, data = df_surv)`. A `coxph`
-#'   model is predicted from directly; for any other model, give
-#'   `predict_function`. Can also be given as the first argument, as in
-#'   `cipcw_control(cens_fit)`.
+#' @param model,predict_function Your own censoring model, fitted on the same
+#'   patients with the censored patients as the events, together with
+#'   `predict_function`, a `function(model, newdata, times)` returning, for each
+#'   row of `newdata`, the probability of remaining uncensored at the time of
+#'   the same position in `times`. Both are needed, for any kind of model.
 #' @param weight_event,weight_horizon Your own censoring weights, one per
 #'   patient (row of `data=`), instead of a model: `weight_event` for the
 #'   patients with an event by the time of the assessment
@@ -56,10 +55,6 @@
 #'   exactly that time is not included (the usual convention, as for
 #'   Kaplan-Meier: an event tied with a censoring comes first); `"right"`
 #'   includes it.
-#' @param predict_function For your own `model` that is not a `coxph` model: a
-#'   `function(model, newdata, times)` returning, for each row of `newdata`, the
-#'   probability of remaining uncensored at the time of the same position in
-#'   `times`.
 #'
 #' @return An object of class `cipcw_control`, for `cipcw=` of [dca()] and
 #'   [test_consequences()].
@@ -75,26 +70,26 @@
 #'     thresholds = seq(0, 0.5, 0.01),
 #'     cipcw = cipcw_control(~ age + famhistory, min_prob = 0.05))
 #'
-#' # your own censoring model (censored patients as the events), no truncation
-#' cens_fit <- survival::coxph(Surv(ttcancer, cancer == 0) ~ age + famhistory,
-#'                             data = df_surv)
+#' # your own censoring model (censored patients as the events), with a function
+#' # returning the probabilities of remaining uncensored; no truncation
+#' cens_fit <- survival::survreg(Surv(ttcancer, cancer == 0) ~ age + famhistory,
+#'                               data = df_surv, dist = "weibull")
+#' uncensored <- function(model, newdata, times) {
+#'   lp <- predict(model, newdata = newdata, type = "lp")
+#'   1 - stats::pweibull(times, shape = 1 / model$scale, scale = exp(lp))
+#' }
 #' dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
 #'     thresholds = seq(0, 0.5, 0.01),
-#'     cipcw = cipcw_control(cens_fit, min_prob = NULL))
+#'     cipcw = cipcw_control(model = cens_fit, predict_function = uncensored,
+#'                           min_prob = NULL))
 cipcw_control <- function(formula = NULL, model = NULL, weight_event = NULL,
                           weight_horizon = NULL, min_prob = 0.02,
                           ties = c("left", "right"), predict_function = NULL) {
   ties <- match.arg(ties)
-  if (!is.null(formula) && !inherits(formula, "formula")) {
-    # a fitted censoring model given first, as in cipcw_control(cens_fit)
-    if (is.null(model) && is.object(formula) && !is.data.frame(formula)) {
-      model <- formula
-      formula <- NULL
-    } else {
-      stop("`formula=` must be a formula of the covariates of the censoring model, ",
-           "e.g. ~ age + famhistory.", call. = FALSE)
-    }
-  }
+  if (!is.null(formula) && !inherits(formula, "formula"))
+    stop("`formula=` must be a formula of the covariates of the censoring model, ",
+         "e.g. ~ age + famhistory. A fitted censoring model goes in `model=`, ",
+         "with `predict_function=`.", call. = FALSE)
   if (!is.null(formula)) {
     if (!is.null(model) || !is.null(weight_event) || !is.null(weight_horizon))
       stop("Give one of `formula=`, a censoring `model=` or the weights, not several.",
@@ -127,10 +122,10 @@ cipcw_control <- function(formula = NULL, model = NULL, weight_event = NULL,
     stop("`weight_event=` and `weight_horizon=` must have the same length.", call. = FALSE)
   if (!is.null(model) && (is.numeric(model) || is.data.frame(model)))
     stop("`model=` must be a fitted censoring model.", call. = FALSE)
-  if (!is.null(model) && is.null(predict_function) && !inherits(model, "coxph"))
-    stop("For a censoring model that is not a `coxph` model, give `predict_function=`, ",
-         "a function(model, newdata, times) returning the probabilities of remaining ",
-         "uncensored.", call. = FALSE)
+  if (!is.null(model) && is.null(predict_function))
+    stop("Your own censoring `model=` needs `predict_function=`, a function(model, ",
+         "newdata, times) returning the probabilities of remaining uncensored.",
+         call. = FALSE)
   if (is.null(formula) && is.null(model) && !has_w)
     stop("Give the covariates of the censoring (`formula=`), a censoring `model=`, ",
          "or the weights.", call. = FALSE)
@@ -159,13 +154,14 @@ print.cipcw_control <- function(x, ...) {
   invisible(x)
 }
 
-# `cipcw=` of dca(): NULL, a formula, a fitted censoring model or cipcw_control().
+# `cipcw=` of dca(): NULL, the covariates of the censoring (a formula), or
+# cipcw_control().
 .as_cipcw <- function(x) {
   if (is.null(x) || inherits(x, "cipcw_control")) return(x)
   if (inherits(x, "formula")) return(cipcw_control(formula = x))
-  if (is.object(x) && !is.data.frame(x)) return(cipcw_control(model = x))
-  stop("`cipcw=` must be the covariates of the censoring (e.g. ~ age + famhistory), ",
-       "a fitted censoring model, or cipcw_control().", call. = FALSE)
+  stop("`cipcw=` must be the covariates of the censoring (e.g. ~ age + famhistory) or ",
+       "cipcw_control(). Your own censoring model goes in ",
+       "cipcw_control(model = , predict_function = ).", call. = FALSE)
 }
 
 # The censoring weights of every patient: list(weight_event, weight_horizon).
@@ -208,6 +204,7 @@ print.cipcw_control <- function(x, ...) {
   }
   g_at <- function(rows, times) {
     nd <- data[rows, , drop = FALSE]
+    # the Cox model fitted from `formula=`; a given model has predict_function
     if (is.null(cipcw$predict_function)) {
       return(.cox_survival(model, nd, times, cipcw$ties))
     }
@@ -280,7 +277,7 @@ print.cipcw_control <- function(x, ...) {
   tryCatch(eval(cl, env), error = function(e)
     stop("Could not fit the Cox censoring model ", paste(deparse(formula), collapse = " "),
          " (", conditionMessage(e), "). Give your own censoring model with ",
-         "cipcw = cipcw_control(model = ).", call. = FALSE))
+         "cipcw_control(model = , predict_function = ).", call. = FALSE))
 }
 
 # A given censoring model must be fitted to the censoring times: its events are

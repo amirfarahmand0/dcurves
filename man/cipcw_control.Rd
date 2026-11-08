@@ -20,12 +20,11 @@ cipcw_control(
 on \verb{data=} of \code{\link[=dca]{dca()}} (with its case weights, if any). The same as giving
 the formula as \verb{cipcw=} directly.}
 
-\item{model}{Your own censoring model, fitted on the same patients with the
-censored patients as the events, e.g.
-\code{coxph(Surv(ttcancer, cancer == 0) ~ age, data = df_surv)}. A \code{coxph}
-model is predicted from directly; for any other model, give
-\code{predict_function}. Can also be given as the first argument, as in
-\code{cipcw_control(cens_fit)}.}
+\item{model, predict_function}{Your own censoring model, fitted on the same
+patients with the censored patients as the events, together with
+\code{predict_function}, a \verb{function(model, newdata, times)} returning, for each
+row of \code{newdata}, the probability of remaining uncensored at the time of
+the same position in \code{times}. Both are needed, for any kind of model.}
 
 \item{weight_event, weight_horizon}{Your own censoring weights, one per
 patient (row of \verb{data=}), instead of a model: \code{weight_event} for the
@@ -45,11 +44,6 @@ probability just before each patient's own time, so a censoring step at
 exactly that time is not included (the usual convention, as for
 Kaplan-Meier: an event tied with a censoring comes first); \code{"right"}
 includes it.}
-
-\item{predict_function}{For your own \code{model} that is not a \code{coxph} model: a
-\verb{function(model, newdata, times)} returning, for each row of \code{newdata}, the
-probability of remaining uncensored at the time of the same position in
-\code{times}.}
 }
 \value{
 An object of class \code{cipcw_control}, for \verb{cipcw=} of \code{\link[=dca]{dca()}} and
@@ -63,8 +57,8 @@ covariates of the censoring are all that is needed, e.g.
 \code{dca(..., cipcw = ~ age + famhistory)}: a Cox model of the censoring times
 on these covariates is fitted, and the weights are truncated at
 \code{min_prob = 0.02} (i.e. weights of at most 50). \code{cipcw_control()} sets the
-other options: another truncation, your own censoring model, or the weights
-themselves.
+other options: another truncation, your own censoring model with a function
+that predicts from it, or the weights themselves.
 }
 \section{cIPCW}{
 
@@ -98,12 +92,18 @@ dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
     thresholds = seq(0, 0.5, 0.01),
     cipcw = cipcw_control(~ age + famhistory, min_prob = 0.05))
 
-# your own censoring model (censored patients as the events), no truncation
-cens_fit <- survival::coxph(Surv(ttcancer, cancer == 0) ~ age + famhistory,
-                            data = df_surv)
+# your own censoring model (censored patients as the events), with a function
+# returning the probabilities of remaining uncensored; no truncation
+cens_fit <- survival::survreg(Surv(ttcancer, cancer == 0) ~ age + famhistory,
+                              data = df_surv, dist = "weibull")
+uncensored <- function(model, newdata, times) {
+  lp <- predict(model, newdata = newdata, type = "lp")
+  1 - stats::pweibull(times, shape = 1 / model$scale, scale = exp(lp))
+}
 dca(Surv(ttcancer, cancer) ~ cancerpredmarker, data = df_surv, time = 1,
     thresholds = seq(0, 0.5, 0.01),
-    cipcw = cipcw_control(cens_fit, min_prob = NULL))
+    cipcw = cipcw_control(model = cens_fit, predict_function = uncensored,
+                          min_prob = NULL))
 }
 \seealso{
 \code{\link[=dca]{dca()}}
